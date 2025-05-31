@@ -1,9 +1,9 @@
+import os
 from os.path import exists
 from json import loads
-from os import system
-from os import remove
 from os.path import join
 import zipfile
+import subprocess
 
 def unpress(filename: str, path: str):
     try:
@@ -42,14 +42,15 @@ def run(mcdir: str, version: str,javaw_path: str(),maxMen: str, username: str, u
                             filepath = mcdir + "/libraries/" + n["path"]#classifiers的路径
                             unpress(filepath, dirct_path)
         #配置JVM参数
-        JVM = '"'+javaw_path+'" -XX:+UseG1GC -XX:-UseAdaptiveSizePolicy' +\
-        ' -XX:-OmitStackTraceInFastThrow -Dfml.ignoreInvalidMinecraftCertificates=True '+\
-        '-Dfml.ignorePatchDiscrepancies=True -Dlog4j2.formatMsgNoLookups=true '+\
-        '-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump '+\
-        '-Dos.name="Windows 10" -Dos.version=10.0 -Djava.library.path="'+\
-        mcdir + "/versions/" + version + "/" + version + "-natives" +\
-        '" -Dminecraft.launcher.brand=launcher '+\
-        '-Dminecraft.launcher.version=1.0.0 -cp'
+        #JVM = '"'+javaw_path+'" -XX:+UseG1GC -XX:-UseAdaptiveSizePolicy' +\
+        #' -XX:-OmitStackTraceInFastThrow -Dfml.ignoreInvalidMinecraftCertificates=True '+\
+        #'-Dfml.ignorePatchDiscrepancies=True -Dlog4j2.formatMsgNoLookups=true '+\
+        #'-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump '+\
+        #'-Dos.name="Windows 10" -Dos.version=10.0 -Djava.library.path="'+\
+        #mcdir + "/versions/" + version + "/" + version + "-natives" +\
+        #'" -Dminecraft.launcher.brand=launcher '+\
+        #'-Dminecraft.launcher.version=1.0.0 -cp'
+        JVM = '-XX:+UseG1GC -XX:-UseAdaptiveSizePolicy' +' -XX:-OmitStackTraceInFastThrow -Dfml.ignoreInvalidMinecraftCertificates=True '+'-Dfml.ignorePatchDiscrepancies=True -Dlog4j2.formatMsgNoLookups=true '+'-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump '+'-Dos.name="Windows 10" -Dos.version=10.0 -Djava.library.path="'+ mcdir + "/versions/" + version + "/" + version + "-natives" +'" -Dminecraft.launcher.brand=launcher '+'-Dminecraft.launcher.version=1.0.0 -cp'
         classpath += '"'
         for libraries in dic['libraries']:
             if not 'classifiers' in libraries['downloads']:
@@ -104,10 +105,9 @@ def run(mcdir: str, version: str,javaw_path: str(),maxMen: str, username: str, u
         #组装命令条
         commandLine = JVM + " " + mc_args
         #使用bat的方法运行过长的命令条
-        bat = open("run.bat", "w")
-        bat.write(commandLine)
-        bat.close()
-
-        system("run.bat")
-        #视频中没有讲到的,在运行完Minecraft之后，删除run.bat，这样可以避免与其他文件冲突(如果真有人写了一个运行py文件的.bat文件，名字叫run.bat的话,别问我怎么知道的)
-        remove("run.bat")
+        subprocess.run(
+            [f'"{javaw_path}"'],
+            input=JVM.encode(),  # 转换为字节流
+            stdout=subprocess.PIPE,
+            check=True
+        )
