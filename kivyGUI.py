@@ -14,6 +14,7 @@ from kivy.uix.label import Label
 from kivy.uix.progressbar import ProgressBar
 from kivy.uix.dropdown import DropDown
 from kivy.uix.button import Button
+from kivy.uix.popup import Popup
 from kivy.graphics import Color, RoundedRectangle, Line, Rectangle
 from kivy.metrics import dp, sp
 from kivy.utils import get_color_from_hex as hex
@@ -38,6 +39,10 @@ Config.set('graphics', 'minimum_width', '1000')
 Config.set('graphics', 'minimum_height', '600')
 Window.clearcolor = (0.75, 0.88, 1, 1)  # 更柔和的蓝色背景
 
+# 在Windows上隐藏边框
+if sys.platform == 'win32':
+    Window.borderless = True
+
 
 # 生成资源文件目录访问路径
 def resource_path(relative_path):
@@ -46,6 +51,7 @@ def resource_path(relative_path):
     else:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
+
 
 # 解决Windows中文乱码问题
 if sys.platform == 'win32':
@@ -94,12 +100,14 @@ def tr(key):
     return app.get_text(key) if app else key
 
 
-# 创建KV字符串 - 不再使用import app
+# 创建KV字符串
 kv_string = '''
 #:import hex kivy.utils.get_color_from_hex
 #:import tr __main__.tr
 #:import LabelBase kivy.core.text.LabelBase
 #:set chinese_font 'ChineseFont' if 'ChineseFont' in LabelBase._fonts else 'Roboto'
+#:import StringProperty kivy.properties.StringProperty
+#:import ListProperty kivy.properties.ListProperty
 
 <MCDropDownButton>:
     size_hint: None, None
@@ -125,7 +133,22 @@ kv_string = '''
         halign: 'center'
         valign: 'middle'
 
+<MCLoaderDropdown>:
+    Button:
+        size_hint_y: None
+        height: dp(40)
+        background_normal: ''
+        background_color: (0.5, 0.7, 0.9, 1)
+        text: root.selected_loader
+        font_size: sp(16)
+        font_name: chinese_font
+        color: (1, 1, 1, 1)
+        on_release: root.open(self)
+
 <MCButton>:
+    text: ""
+    bg_color: [0.4, 0.6, 0.9, 1]
+    text_color:  [1, 1, 1, 1]
     size_hint: None, None
     size: dp(200), dp(50)
     padding: dp(10)
@@ -160,7 +183,7 @@ kv_string = '''
 <MCVersionCard>:
     orientation: 'vertical'
     size_hint: None, None
-    size: dp(300), dp(140)  # 增加高度以容纳更多信息
+    size: dp(300), dp(170)  # 增加高度以容纳加载器选择
     padding: dp(10)
     spacing: dp(5)
     canvas.before:
@@ -244,6 +267,28 @@ kv_string = '''
         shorten: True
         shorten_from: 'right'
 
+    # 加载器选择区域 - 修改为下拉菜单
+    BoxLayout:
+        size_hint_y: None
+        height: dp(30)
+        padding: [dp(2), 0]
+        spacing: dp(5)
+
+        Label:
+            text: tr('loader') + ':'
+            font_size: sp(16)
+            font_name: chinese_font
+            color: (0.3, 0.3, 0.5, 1)
+            size_hint_x: 0.4
+            halign: 'left'
+            text_size: self.width, None
+
+        MCDropDownButton:
+            id: loader_dropdown
+            size_hint_x: 0.6
+            text: tr(root.selected_loader)
+            on_press: root.show_loader_dropdown(self)
+
 <MCServerCard>:
     orientation: 'vertical'
     size_hint: None, None
@@ -319,6 +364,7 @@ kv_string = '''
 
 <MainScreen>:
     selected_version: ''
+    selected_loader: 'vanilla'
     status: 'Ready'
     progress: 0
     version_data: []
@@ -342,7 +388,7 @@ kv_string = '''
 
             Label:
                 id: title_label
-                text: tr('mc_launcher')
+                text: tr('STMYNE Launcher')
                 font_size: sp(30)
                 font_name: chinese_font
                 bold: True
@@ -352,7 +398,7 @@ kv_string = '''
                 text_size: self.width, None
 
             Label:
-                text: 'v1.5.0'
+                text: 'v1.6.0'
                 font_size: sp(18)
                 font_name: chinese_font
                 color: (0.3, 0.3, 0.5, 1)
@@ -461,6 +507,16 @@ kv_string = '''
                         font_size: sp(18)
                         font_name: chinese_font
                         color: (0.1, 0.2, 0.4, 1)
+                        halign: 'left'
+                        valign: 'middle'
+                        text_size: self.width, None
+
+                    Label:
+                        id: loader_label
+                        text: tr('loader') + ': ' + tr(root.selected_loader)
+                        font_size: sp(16)
+                        font_name: chinese_font
+                        color: (0.3, 0.3, 0.5, 1)
                         halign: 'left'
                         valign: 'middle'
                         text_size: self.width, None
@@ -689,7 +745,7 @@ kv_string = '''
             id: value_label
             text: root.value
             font_size: sp(18)
-            font_name: chinese_font  # 修复这里
+            font_name: chinese_font
             color: (0.3, 0.3, 0.5, 1)
             size_hint_x: 0.6
             halign: 'right'
@@ -783,6 +839,10 @@ class MCDropDownButton(ButtonBehavior, BoxLayout):
     text = StringProperty('')
 
 
+class MCLoaderDropdown(BoxLayout):
+    selected_loader = StringProperty('vanilla')
+
+
 class MCButton(ButtonBehavior, BoxLayout):
     text = StringProperty('')
     bg_color = ListProperty()
@@ -796,10 +856,12 @@ class MCVersionCard(ButtonBehavior, BoxLayout):
     file_size = StringProperty('0 KB')
     description = StringProperty('')
     selected = BooleanProperty(False)
+    selected_loader = StringProperty('vanilla')  # 默认选择原版
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.bind(on_press=self.on_version_selected)
+        self.dropdown = None
 
     def on_version_selected(self, instance):
         # 取消选择所有其他版本
@@ -811,6 +873,44 @@ class MCVersionCard(ButtonBehavior, BoxLayout):
         self.selected = True
         app = App.get_running_app()
         app.root.current_screen.selected_version = self.version_name
+        app.root.current_screen.selected_loader = self.selected_loader
+
+    def show_loader_dropdown(self, button):
+        """显示加载器下拉菜单"""
+        if self.dropdown:
+            self.dropdown.dismiss()
+            self.dropdown = None
+
+        dropdown = DropDown()
+        dropdown.auto_width = False
+        dropdown.width = dp(120)
+
+        # 添加加载器选项
+        for loader in ['vanilla', 'fabric', 'forge']:
+            btn = Button(text=tr(loader),
+                         size_hint_y=None,
+                         height=dp(40),
+                         background_normal='',
+                         background_color=(0.5, 0.7, 0.9, 1),
+                         color=(1, 1, 1, 1),
+                         font_size=sp(16),
+                         font_name='ChineseFont')
+            btn.bind(on_press=lambda btn_inst, l=loader: self.select_loader(l, dropdown))
+            dropdown.add_widget(btn)
+
+        dropdown.open(button)
+        self.dropdown = dropdown
+
+    def select_loader(self, loader_type, dropdown):
+        """选择加载器类型"""
+        self.selected_loader = loader_type
+        dropdown.dismiss()
+        self.dropdown = None
+
+        # 更新主屏幕的加载器显示
+        if self.selected:
+            app = App.get_running_app()
+            app.root.current_screen.selected_loader = loader_type
 
 
 class MCServerCard(ButtonBehavior, BoxLayout):
@@ -875,6 +975,7 @@ class MCLSettingItem(BoxLayout):
 
 class MainScreen(Screen):
     selected_version = StringProperty('')
+    selected_loader = StringProperty('vanilla')  # 默认选择原版
     status = StringProperty('Ready')
     progress = NumericProperty(0)
     version_data = ListProperty([])
@@ -941,7 +1042,7 @@ class MainScreen(Screen):
             self.status = tr('select_version_first')
             return
 
-        self.status = tr('launching_minecraft')
+        self.status = tr('launching_minecraft') + f" ({self.selected_version}, {tr(self.selected_loader)})"
         self.progress = 0
 
         # 模拟启动过程
@@ -1002,7 +1103,11 @@ class MCLancherApp(App):
             'release_desc': 'Official stable release',
             'snapshot_desc': 'Experimental snapshot version',
             'fetching_motd': 'Fetching server info...',
-            'server_offline': 'Server offline'
+            'server_offline': 'Server offline',
+            'vanilla': 'Vanilla',
+            'fabric': 'Fabric',
+            'forge': 'Forge',
+            'loader': 'Loader'
         },
         'zh': {
             'mc_launcher': '我的世界启动器',
@@ -1044,7 +1149,11 @@ class MCLancherApp(App):
             'release_desc': '官方稳定版本',
             'snapshot_desc': '实验性快照版本',
             'fetching_motd': '正在获取服务器信息...',
-            'server_offline': '服务器离线'
+            'server_offline': '服务器离线',
+            'vanilla': '原版',
+            'fabric': 'Fabric',
+            'forge': 'Forge',
+            'loader': '加载器'
         }
     })
 
@@ -1093,6 +1202,7 @@ class MCLancherApp(App):
         main_screen.ids.launch_btn.text = tr('launch_game')
         main_screen.ids.status_label.text = tr('status') + ': ' + main_screen.status
         main_screen.ids.lang_btn.text = tr('language') + ': ' + self.get_language_display()
+        main_screen.ids.loader_label.text = tr('loader') + ': ' + tr(main_screen.selected_loader)
 
         # 更新选择标签
         if main_screen.selected_version:
